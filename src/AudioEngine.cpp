@@ -79,34 +79,6 @@ DeviceNames AudioEngine::listDeviceNames() {
     return names;
 }
 
-bool AudioEngine::syncSampleRate(ComPtr<IAudioClient> inputClient, ComPtr<IAudioClient> outputClient) {
-    if (!inputClient || !outputClient) return false;
-
-    WAVEFORMATEX* inFormat = nullptr;
-    WAVEFORMATEX* outFormat = nullptr;
-    HRESULT hr = inputClient->GetMixFormat(&inFormat);
-    if (FAILED(hr) || !inFormat) return false;
-    hr = outputClient->GetMixFormat(&outFormat);
-    if (FAILED(hr) || !outFormat) { CoTaskMemFree(inFormat); return false; }
-
-    // 如果不等则以 input 为准（只同步采样率和 bytes/sec）
-    if (inFormat->nSamplesPerSec != outFormat->nSamplesPerSec ||
-        inFormat->wBitsPerSample != outFormat->wBitsPerSample ||
-        inFormat->nChannels != outFormat->nChannels) {
-        // 简单策略：用 input 的关键字段覆盖 output 的对应字段（注意：若格式完全不兼容，后面应该做重采样）
-        outFormat->nSamplesPerSec = inFormat->nSamplesPerSec;
-        outFormat->nAvgBytesPerSec = inFormat->nAvgBytesPerSec;
-        outFormat->nBlockAlign = inFormat->nBlockAlign;
-        outFormat->wBitsPerSample = inFormat->wBitsPerSample;
-        outFormat->nChannels = inFormat->nChannels;
-    }
-
-    if (mixFormat) CoTaskMemFree(mixFormat);
-    mixFormat = outFormat; // 使用同步后的格式（注意：outFormat 从 GetMixFormat 分配，后面由 this 释放）
-    CoTaskMemFree(inFormat);
-    return true;
-}
-
 bool AudioEngine::startCopy(const std::vector<std::wstring>& inputNames, const std::wstring& outputName,const DWORD bufferMs) {
     if (inputNames.empty()) return false;
 
@@ -378,4 +350,32 @@ void AudioEngine::captureLoop() {
 
     if (mmHandle) AvRevertMmThreadCharacteristics(mmHandle);
     else SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+}
+
+auto AudioEngine::syncSampleRate(ComPtr<IAudioClient> inputClient, ComPtr<IAudioClient> outputClient) -> bool {
+    if (!inputClient || !outputClient) return false;
+
+    WAVEFORMATEX* inFormat = nullptr;
+    WAVEFORMATEX* outFormat = nullptr;
+    HRESULT hr = inputClient->GetMixFormat(&inFormat);
+    if (FAILED(hr) || !inFormat) return false;
+    hr = outputClient->GetMixFormat(&outFormat);
+    if (FAILED(hr) || !outFormat) { CoTaskMemFree(inFormat); return false; }
+
+    // 如果不等则以 input 为准（只同步采样率和 bytes/sec）
+    if (inFormat->nSamplesPerSec != outFormat->nSamplesPerSec ||
+        inFormat->wBitsPerSample != outFormat->wBitsPerSample ||
+        inFormat->nChannels != outFormat->nChannels) {
+        // 简单策略：用 input 的关键字段覆盖 output 的对应字段（注意：若格式完全不兼容，后面应该做重采样）
+        outFormat->nSamplesPerSec = inFormat->nSamplesPerSec;
+        outFormat->nAvgBytesPerSec = inFormat->nAvgBytesPerSec;
+        outFormat->nBlockAlign = inFormat->nBlockAlign;
+        outFormat->wBitsPerSample = inFormat->wBitsPerSample;
+        outFormat->nChannels = inFormat->nChannels;
+    }
+
+    if (mixFormat) CoTaskMemFree(mixFormat);
+    mixFormat = outFormat; // 使用同步后的格式（注意：outFormat 从 GetMixFormat 分配，后面由 this 释放）
+    CoTaskMemFree(inFormat);
+    return true;
 }

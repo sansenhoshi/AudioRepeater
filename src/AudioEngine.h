@@ -21,7 +21,7 @@ public:
     ~AudioEngine();
 
     // 列出可用的输入与输出设备
-    DeviceNames listDeviceNames();
+    static DeviceNames listDeviceNames();
 
     // 启动转发：输入设备名列表（loopback 源名列表），输出设备名
     bool startCopy(const std::vector<std::wstring>& inputDevices,
