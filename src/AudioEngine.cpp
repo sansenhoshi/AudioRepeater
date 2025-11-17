@@ -34,7 +34,7 @@ DeviceNames AudioEngine::listDeviceNames() {
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
     if (FAILED(hr)) return names;
 
-    // 输出设备
+    // 输出设备（render） —— 既是播放目标，也可以作为 loopback 源
     ComPtr<IMMDeviceCollection> collection;
     if (SUCCEEDED(enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &collection))) {
         UINT count = 0;
@@ -48,13 +48,15 @@ DeviceNames AudioEngine::listDeviceNames() {
                 PropVariantInit(&varName);
                 if (SUCCEEDED(props->GetValue(PKEY_Device_FriendlyName, &varName))) {
                     names.outputs.push_back(std::wstring(varName.pwszVal));
+                    // 同时把 render 设备也作为 loopback 源暴露（UI 层用来选择要捕获的播放设备）
+                    names.loopbackSources.push_back(std::wstring(varName.pwszVal));
                 }
                 PropVariantClear(&varName);
             }
         }
     }
 
-    // 输入设备
+    // 物理输入设备（capture）
     collection.Reset();
     if (SUCCEEDED(enumerator->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &collection))) {
         UINT count = 0;
@@ -141,22 +143,45 @@ bool AudioEngine::startCopy(const std::vector<std::wstring>& inputNames, const s
     hr = outDev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &outputClient);
     if (FAILED(hr)) return false;
 
-    // 获取默认回环输入 (系统播放捕获)
+    // 获取 output 的 mix format（后续作为 render 的格式）
+    hr = outputClient->GetMixFormat(&mixFormat);
+    if (FAILED(hr) || !mixFormat) return false;
+
+    // 为演示简化：选择第一个 inputNames 中的源作为 loopback 捕获（当前代码仅支持单个 loopback 源的实际捕获）
+    // UI 已经允许多选来源并屏蔽输出候选；如果需要多源捕获与混音，这里需扩展为对每个 inputNames 激活独立 loopback client 并做混音逻辑
+    std::wstring firstInputName = inputNames[0];
+
+    // 在 render 列表中查找与 firstInputName 对应的设备，然后在该设备上 Activate IAudioClient 并 Initialize 为 loopback
+    collection.Reset();
+    hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &collection);
+    if (FAILED(hr)) return false;
+    UINT renderCount = 0; collection->GetCount(&renderCount);
     ComPtr<IMMDevice> loopbackDev;
-    hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &loopbackDev);
-    if (FAILED(hr) || !loopbackDev) return false;
+    for (UINT i = 0; i < renderCount; ++i) {
+        ComPtr<IMMDevice> dev;
+        collection->Item(i, &dev);
+        ComPtr<IPropertyStore> props;
+        if (SUCCEEDED(dev->OpenPropertyStore(STGM_READ, &props))) {
+            PROPVARIANT varName; PropVariantInit(&varName);
+            if (SUCCEEDED(props->GetValue(PKEY_Device_FriendlyName, &varName))) {
+                if (firstInputName == std::wstring(varName.pwszVal)) {
+                    loopbackDev = dev;
+                }
+            }
+            PropVariantClear(&varName);
+        }
+    }
+    if (!loopbackDev) return false;
 
     ComPtr<IAudioClient> inputClient;
     hr = loopbackDev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &inputClient);
     if (FAILED(hr)) return false;
 
-    // 同步采样率/格式
-    if (!syncSampleRate(inputClient, outputClient)) {
-        // 如果同步失败则继续，但风险自负
-    }
+    // 同步采样率/格式（若无法同步则继续，但 mixFormat 已取自 output）
+    syncSampleRate(inputClient, outputClient);
 
-    // 获取 buffer size（使用一个合理的 buffer duration，比如 100ms）
-    REFERENCE_TIME hnsBufferDuration = 10000 * bufferMs; // 100ms in 100-ns units; 可调整到 3000000 (300ms) 等
+    // 获取 buffer size（使用一个合理的 buffer duration，比如 bufferMs）
+    REFERENCE_TIME hnsBufferDuration = 10000 * bufferMs; // ms -> 100-ns units; 可调整
     UINT32 bufferFrameCount = 0;
 
     // 初始化输出 client （共享模式 + event callback）
@@ -180,7 +205,7 @@ bool AudioEngine::startCopy(const std::vector<std::wstring>& inputNames, const s
     hr = inputClient->SetEventHandle(captureEvent);
     if (FAILED(hr)) return false;
 
-    // 同样为输出也注册事件（可选：用于更精确调度），但这里主要用捕获事件唤醒处理
+    // 为输出也注册事件（可选）
     if (renderEvent) { CloseHandle(renderEvent); renderEvent = nullptr; }
     renderEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!renderEvent) return false;
@@ -195,7 +220,7 @@ bool AudioEngine::startCopy(const std::vector<std::wstring>& inputNames, const s
     this->outputClient = outputClient;
     running = true;
 
-    // 启动线程
+    // 启动工作线程
     captureThread = std::thread(&AudioEngine::captureLoop, this);
 
     return true;
@@ -208,7 +233,6 @@ void AudioEngine::stopCopy() {
     }
 
     if (captureThread.joinable()) {
-        // 唤醒事件以确保线程能退出
         if (captureEvent) SetEvent(captureEvent);
         captureThread.join();
     }

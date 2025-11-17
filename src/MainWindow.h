@@ -1,35 +1,38 @@
 #pragma once
+
 #include <QMainWindow>
 #include <QComboBox>
 #include <QListWidget>
 #include <QPushButton>
 #include <QLabel>
+#include <QSlider>
 #include "AudioEngine.h"
 
 class MainWindow : public QMainWindow {
-    Q_OBJECT
-public:
-    MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+     Q_OBJECT
+ public:
+     explicit MainWindow(QWidget* parent = nullptr);
+     ~MainWindow() override;
 
-private:
-    void buildUi();
-    void refreshDevices();
-    void onRefresh();
-    void onStart();
-    void onStop();
+ private slots:
+     void refreshDevices();
+     void onInputSelectionChanged();
+     void onStartClicked();
+     void onStopClicked();
 
-    QWidget* central;
-    QComboBox* outputCombo;
-    QListWidget* inputList;
-    QPushButton* refreshBtn;
-    QPushButton* startBtn;
-    QPushButton* stopBtn;
-    QLabel* statusLabel;
+ private:
+     // 后端引擎
+     AudioEngine engine;
 
-    // 新增缓冲长度控件
-    QSlider* bufferSlider;
-    QLabel* bufferLabel;
+     // UI 元件
+     QComboBox* outputCombo;
+     QListWidget* inputList;
+     QPushButton* refreshBtn;
+     QPushButton* startBtn;
+     QPushButton* stopBtn;
+     QLabel* statusLabel;
 
-    AudioEngine engine;
-};
+     // 缓冲长度控件
+     QSlider* bufferSlider;
+     QLabel* bufferLabel;
+ };
