@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 #include <wrl/client.h>
-#include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <atomic>
 #include <thread>
