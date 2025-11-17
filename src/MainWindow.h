@@ -8,7 +8,7 @@
 #include <QSlider>
 #include "AudioEngine.h"
 
-class MainWindow : public QMainWindow {
+class MainWindow final : public QMainWindow {
     Q_OBJECT
 
 public:
@@ -17,9 +17,9 @@ public:
     ~MainWindow() override;
 
 private slots:
-    void refreshDevices();
+    void refreshDevices() const;
 
-    void onInputSelectionChanged();
+    void onInputSelectionChanged() const;
 
     void onStartClicked();
 
@@ -38,7 +38,7 @@ private:
     QLabel *statusIcon;
     QLabel *statusText;
 
-    void setStatus(const QString &color, const QString &text);
+    void setStatus(const QString &color, const QString &text) const;
 
 
     // 缓冲长度控件

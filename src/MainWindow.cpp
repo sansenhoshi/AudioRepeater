@@ -1,5 +1,4 @@
 #include "MainWindow.h"
-#include <QVBoxLayout>
 #include <QPainter>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -15,13 +14,13 @@ MainWindow::MainWindow(QWidget *parent)
     QWidget *central = new QWidget(this);
     setCentralWidget(central);
     // 设置图标
-    setWindowIcon(QIcon(":/resources/favicon.png")); // Qt 资源路径
+    setWindowIcon(QIcon(":/resources/favicon.png"));
 
     outputCombo = new QComboBox(this);
     inputList = new QListWidget(this);
     inputList->setSelectionMode(QAbstractItemView::MultiSelection);
 
-    refreshBtn = new QPushButton("刷新设备", this);
+    refreshBtn = new QPushButton("刷新", this);
     startBtn = new QPushButton("开始", this);
     stopBtn = new QPushButton("停止", this);
     // 状态图标 + 文本
@@ -108,7 +107,7 @@ MainWindow::~MainWindow() {
     engine.stopCopy();
 }
 
-void MainWindow::refreshDevices() {
+void MainWindow::refreshDevices() const {
     outputCombo->clear();
     inputList->clear();
 
@@ -128,7 +127,7 @@ void MainWindow::refreshDevices() {
     onInputSelectionChanged();
 }
 
-void MainWindow::onInputSelectionChanged() {
+void MainWindow::onInputSelectionChanged() const {
     // 收集已选中的来源名称（QString）
     QSet<QString> selectedNames;
     for (auto *it: inputList->selectedItems()) {
@@ -196,7 +195,7 @@ void MainWindow::onStopClicked() {
     bufferLabel->setEnabled(true);    // ← 标签也禁用（变灰）
 }
 
-void MainWindow::setStatus(const QString &color, const QString &text) {
+void MainWindow::setStatus(const QString &color, const QString &text) const {
     QPixmap pix(12, 12);
     pix.fill(Qt::transparent);
     {
