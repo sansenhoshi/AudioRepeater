@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include <QVBoxLayout>
+#include <QPainter>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QGroupBox>
@@ -8,11 +9,10 @@
 #include <QListWidget>
 #include <QMessageBox>
 
-MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent)
-{
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent) {
     // 基本 UI 元件创建
-    QWidget* central = new QWidget(this);
+    QWidget *central = new QWidget(this);
     setCentralWidget(central);
     // 设置图标
     setWindowIcon(QIcon(":/resources/favicon.png")); // Qt 资源路径
@@ -24,15 +24,41 @@ MainWindow::MainWindow(QWidget* parent)
     refreshBtn = new QPushButton("刷新设备", this);
     startBtn = new QPushButton("开始", this);
     stopBtn = new QPushButton("停止", this);
-    statusLabel = new QLabel("就绪", this);
+    // 状态图标 + 文本
+    statusIcon = new QLabel(this);
+    statusIcon->setFixedSize(12, 12);
+
+    statusText = new QLabel("已就绪", this);
+    statusText->setStyleSheet("color:white; font-size:14px;");
+
+    // 创建初始圆点（蓝色）
+    QPixmap pix(12, 12);
+    pix.fill(Qt::transparent);
+    {
+        QPainter p(&pix);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setBrush(QColor("#00AAFF"));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(0, 0, 12, 12);
+    }
+    statusIcon->setPixmap(pix);
+
+    // 组合状态控件
+    auto statusRow = new QWidget(this);
+    auto statusLayout = new QHBoxLayout(statusRow);
+    statusLayout->setContentsMargins(0, 0, 0, 0);
+    statusLayout->setSpacing(5);
+    statusLayout->addWidget(statusIcon);
+    statusLayout->addWidget(statusText);
+
 
     // 缓冲长度控件
     bufferSlider = new QSlider(Qt::Horizontal, this);
     bufferSlider->setRange(25, 500); // 25..500 ms
-    bufferSlider->setValue(150);     // 默认 150 ms
+    bufferSlider->setValue(150); // 默认 150 ms
     bufferLabel = new QLabel("缓冲长度: 150 ms", this);
 
-    connect(bufferSlider, &QSlider::valueChanged, this, [this](int value){
+    connect(bufferSlider, &QSlider::valueChanged, this, [this](int value) {
         bufferLabel->setText(QString("缓冲长度: %1 ms").arg(value));
     });
 
@@ -60,7 +86,8 @@ MainWindow::MainWindow(QWidget* parent)
     ctrlRow->addWidget(startBtn);
     ctrlRow->addWidget(stopBtn);
     ctrlRow->addStretch();
-    ctrlRow->addWidget(statusLabel);
+    // 放到 ctrlRow 的最右侧
+    ctrlRow->addWidget(statusRow);
     layout->addLayout(ctrlRow);
 
     central->setLayout(layout);
@@ -88,12 +115,12 @@ void MainWindow::refreshDevices() {
     auto devices = engine.listDeviceNames();
 
     // 把 loopback-capable 的 render 设备作为“输入来源”供多选（A/B）
-    for (const auto &d : devices.loopbackSources) {
+    for (const auto &d: devices.loopbackSources) {
         inputList->addItem(QString::fromWCharArray(d.c_str()));
     }
 
     // 输出候选（先全部加入，后续会根据选中情况过滤）
-    for (const auto &d : devices.outputs) {
+    for (const auto &d: devices.outputs) {
         outputCombo->addItem(QString::fromWCharArray(d.c_str()));
     }
 
@@ -104,14 +131,14 @@ void MainWindow::refreshDevices() {
 void MainWindow::onInputSelectionChanged() {
     // 收集已选中的来源名称（QString）
     QSet<QString> selectedNames;
-    for (auto *it : inputList->selectedItems()) {
+    for (auto *it: inputList->selectedItems()) {
         selectedNames.insert(it->text());
     }
 
     // 重新构建输出下拉：从 engine 列表中加入 outputs，但跳过已选的来源
     outputCombo->clear();
     auto devices = engine.listDeviceNames();
-    for (const auto &d : devices.outputs) {
+    for (const auto &d: devices.outputs) {
         QString name = QString::fromWCharArray(d.c_str());
         if (!selectedNames.contains(name)) {
             outputCombo->addItem(name);
@@ -121,7 +148,7 @@ void MainWindow::onInputSelectionChanged() {
     // 如果没有可用输出，禁用开始按钮
     if (outputCombo->count() == 0) {
         startBtn->setEnabled(false);
-        statusLabel->setText("无可用输出（可能被选为来源）");
+        setStatus("#FFFFFF", "无可用输出（可能被选为来源）");
     } else {
         startBtn->setEnabled(true);
     }
@@ -150,15 +177,36 @@ void MainWindow::onStartClicked() {
     startBtn->setEnabled(false);
 
     if (engine.startCopy(sources, outName, bufferMs)) {
-        statusLabel->setText("运行中");
+        setStatus("#28FF28", "运行中");
+        bufferSlider->setEnabled(false);   // ← 禁用滑块
+        bufferLabel->setEnabled(false);    // ← 标签也禁用（变灰）
     } else {
-        statusLabel->setText("启动失败");
+        setStatus("#FF0000", "启动失败");
+
         startBtn->setEnabled(true);
     }
 }
 
 void MainWindow::onStopClicked() {
     engine.stopCopy();
-    statusLabel->setText("已停止");
+    setStatus("#FFDC35", "已停止");
+
     startBtn->setEnabled(true);
+    bufferSlider->setEnabled(true);   // ← 禁用滑块
+    bufferLabel->setEnabled(true);    // ← 标签也禁用（变灰）
+}
+
+void MainWindow::setStatus(const QString &color, const QString &text) {
+    QPixmap pix(12, 12);
+    pix.fill(Qt::transparent);
+    {
+        QPainter p(&pix);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setBrush(QColor(color));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(0, 0, 12, 12);
+    }
+
+    statusIcon->setPixmap(pix);
+    statusText->setText(text);
 }
