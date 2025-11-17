@@ -31,9 +31,9 @@ void MainWindow::buildUi() {
 
     // 缓冲长度控件
     bufferSlider = new QSlider(Qt::Horizontal);
-    bufferSlider->setRange(50, 500); // 50~500 ms
-    bufferSlider->setValue(200); // 默认 200ms
-    bufferLabel = new QLabel("缓冲长度: 200 ms");
+    bufferSlider->setRange(25, 500); // 50~500 ms
+    bufferSlider->setValue(150); // 默认 150ms
+    bufferLabel = new QLabel("缓冲长度: 150 ms");
 
     connect(bufferSlider, &QSlider::valueChanged, this, [this](int value){
         bufferLabel->setText(QString("缓冲长度: %1 ms").arg(value));
@@ -46,12 +46,12 @@ void MainWindow::buildUi() {
     auto layout = new QVBoxLayout();
 
     auto topRow = new QHBoxLayout();
-    topRow->addWidget(new QLabel("输出设备:"));
+    topRow->addWidget(new QLabel("设备输出:"));
     topRow->addWidget(outputCombo);
     topRow->addWidget(refreshBtn);
     layout->addLayout(topRow);
 
-    auto group = new QGroupBox("输入设备 (多选)");
+    auto group = new QGroupBox("复制设备 (多选)");
     auto gLayout = new QVBoxLayout();
     gLayout->addWidget(inputList);
     group->setLayout(gLayout);
@@ -107,7 +107,7 @@ void MainWindow::onStart() {
 
     DWORD bufferMs = static_cast<DWORD>(bufferSlider->value());
 
-    if (!engine.startCopy(inputs, output)) {
+    if (!engine.startCopy(inputs, output, bufferMs)) {
         QMessageBox::critical(this, "错误", "启动失败，请查看日志");
         statusLabel->setText("启动失败");
     } else {

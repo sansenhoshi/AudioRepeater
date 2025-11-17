@@ -22,7 +22,8 @@ add_executable(AudioRepeater WIN32
         src/MainWindow.h
         src/AudioEngine.cpp
         src/AudioEngine.h
-        ${RESOURCE_FILES}  # 添加资源文件
+        ${RESOURCE_FILES}
+        resources/app.rc # 添加资源文件
 )
 
 target_link_libraries(AudioRepeater

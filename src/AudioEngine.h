@@ -23,13 +23,18 @@ public:
     DeviceNames listDeviceNames();
 
     // 启动转发：输入设备名列表，输出设备名
-    bool startCopy(const std::vector<std::wstring>& inputNames, const std::wstring& outputName);
+    bool startCopy(const std::vector<std::wstring>& inputDevices,
+               const std::wstring& outputDevice,
+               DWORD bufferMs = 150);
     void stopCopy();
 
 private:
     void captureLoop();
     bool syncSampleRate(Microsoft::WRL::ComPtr<IAudioClient> inputClient,
                         Microsoft::WRL::ComPtr<IAudioClient> outputClient);
+    HANDLE captureEvent = nullptr;
+    HANDLE renderEvent = nullptr;
+    WAVEFORMATEX* mixFormat = nullptr;
 
     std::atomic<bool> running{ false };
     std::mutex audioMutex;
@@ -40,5 +45,4 @@ private:
     Microsoft::WRL::ComPtr<IAudioClient> outputClient;
     Microsoft::WRL::ComPtr<IAudioCaptureClient> captureClient;
     Microsoft::WRL::ComPtr<IAudioRenderClient> renderClient;
-    WAVEFORMATEX* mixFormat{ nullptr };
 };
